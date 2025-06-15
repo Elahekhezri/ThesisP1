@@ -2,6 +2,8 @@ Name | Description
  --- | ---
 [answerset_wa.csv](./data/answerset_wa.csv) | West Asia enties in in the Database of Religious History (DRH) merged with `world_region`, `region_name`, and `region_description`. 
 [polity_normal.csv](./data/polity_normal.csv) | Seshat polities merged with region information.
+[power_raw.csv](./data/power_raw.csv) | Seshat variables related to Polity Power Concenteration index merged with `polity_normal` data.
+[power_simple_wa_.csv](./data/power_simple_wa.csv) | Seshat variables related to Polity Power Concenteration index without metadata merged with West Asia subset of `polity_normal`.
 
 # Data References
 - Turchin, P., Brennan, R., Currie, T. E., Feeney, K. C., Francois, P., Hoyer, D., Manning, J. G., Marciniak, A., Mullins, D. A., Palmisano, A., Peregrine, P., Turner, E. A. L., & Whitehouse, H. (2015). Seshat: The Global History Databank. Cliodynamics: The Journal of Quantitative History and Cultural Evolution, 6(1), 77–107. 
