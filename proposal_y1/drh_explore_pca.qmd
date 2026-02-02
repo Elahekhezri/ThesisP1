@@ -1,0 +1,575 @@
+---
+title: "Principal Comoponent Analysis - Database of Religious History"
+format: html
+toc: true
+toc-depth: 4
+self-contained: true
+embed-resources: true
+---
+
+```{r, results = 'hide', message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(psych)
+library(tidyr)
+library(knitr)
+library(easystats)
+```
+
+```{r, results = 'hide', message = FALSE, warning = FALSE}
+drh <- read_csv("/Users/mac/Downloads/drh_polls_century.csv")
+```
+
+# Summary
+
+This file includes the results of PCA models applied to questions from the Database of Religious History (DRH). The analysis was restricted to data from religious groups, excluding religious texts and places to minimize data redundancy.
+
+The final dataset included 86 religious groups and 87 questions, which is problematic for PCA since the number of variables exceeds the number of observations. To address this, I experimented with two approaches:
+
+1.  Running a model with only honor-related questions \[for now, I included the ones I proposed but this will be replaced by expert-chosen honor-related questions\]: With this approach, PCA grouped most questions based on their category (e.g., questions under 'supernatural monitoring' parent branch versus questions under 'central virtue' parent branch), rather than question content.
+
+2.  Running PCAs separately for each question category (e.g., distinct analyses for questions of 'supernatural monitoring' branch versus 'virtue' branch ): This approach reduces the number of variables in each model and avoids question grouping artifacts. However, it misses the opportunity to identify relationships between questions across different categories.
+
+Overall, one model revealed *some* interpretable patterns, but the results were generally inadequate. This may stem from several factors, including limited sample size, binary variables, and temporal dependencies in the data. Exploring alternative methods for grouping DRH questions seems warranted.
+
+Alternatives to consider:
+
+1.  [This paper](https://doi.org/10.1093/jaarel/lfad065) uses taxonomic trees to identify DRH questions that contribute the most to differentiation between religious groups. I'd appreciate it if you could go through this paper and we can discuss if it makes sense to explore their approach.
+2.  Within the PCA framework, other approaches that can be tested:
+    1.  Including religious places and religious texts would increase the sample size to 287. We can re-test the models with this expanded sample (likely to fail due to data redundancy).
+    2.  Since one problem is the number of variables exceeding cases and another is question categories deriving the components, we could first eliminate non-honor-related questions with expert agreement and then run a partial correlation analysis controlling for question category. Inputting the partial correlation matrix into the PCA instead of complete correlation matrix may yield some interpretable patterns (but overall not particularly suited for binary data).
+3. Exploring [tsfresh](https://tsfresh.readthedocs.io/) for alternative methods.
+4. Creating the composite measure of honor based on top-down expert agreement, rather than bottom-up dimension reduction techniques
+5.  Suggestions for other alternatives?
+
+The remainder of this document presents the analyses performed.
+
+# Target DRH Questions
+
+Parent questions and their follow-up questions used in these analyses:
+
+1.  The parent question 'Are there centrally important virtues advocated by the religious group:' and its sub questions (if the answer to parent question is yes):
+
+    ![Virtues](https://i.postimg.cc/qq5c7mGS/virtues.png){alt="Supernatural Monitoring" fig-align="left"}
+
+<!-- -->
+
+2.  The parent question 'Is supernatural monitoring present' and its sub questions:
+
+![Supernatural Monitoring](https://i.postimg.cc/wMvcgKDD/supernatural-monitoring.png){fig-align="left"}
+
+3.  Supernatural punishments in this lifetime: parent question 'Supernatural punishments are meted out in this lifetime:' and its sub questions:
+
+![Supernatural Punishments in this Lifetime](https://i.postimg.cc/1Xj0zWKG/supernatural-punishment-life.png){fig-align="left"}
+
+4.  Supernatural punishments in the afterlife: parent question 'Supernatural punishments are meted out in the afterlife:' and its sub questions:
+
+![Supernatural Punishments in the Afterlife](https://i.postimg.cc/wMG5BWkh/supernatural-punishment-afterlife.png){fig-align="left"}
+
+5.  Supernatural rewards in this lifetime: parent questions 'Do supernatural beings bestow rewards:' and its sub questions:
+
+![Supernatural Rewards in this Lifetime](https://i.postimg.cc/KjH7Y957/supernatural-reward-life.png){fig-align="left"}
+
+6.  Supernatural rewards in the afterlife: 'Supernatural rewards are bestowed out in the afterlife:' and its sub questions:
+
+![Supernatural Rewards in the Afterlife](https://i.postimg.cc/7hW1LBNM/supernatural-reward-afterlife.png){fig-align="left"}
+
+Across all these branches, certain questions ask about unlisted items (e.g., "Supernatural beings care about other" or "Reward in the afterlife consists of other \[specify\]" or "Other important virtues advocated by the religious group"). These questions are excluded from the analysis.
+
+Other questions excluded: 1. "Supernatural punishments in this life are highly emphasized by the religious group:"; 2. "Supernatural punishments in the afterlife are highly emphasized by the religious group:"; 3. "Supernatural rewards in this life are highly emphasized by the religious group:"; 4. "Supernatural rewards in the afterlife are highly emphasized by the religious group:"
+
+Filtering the data for target questions:
+
+```{r}
+target_questions <- c("Are there centrally important virtues advocated by the religious group:",
+"Is supernatural monitoring present:",
+"Supernatural punishments are meted out in the afterlife:",
+"Supernatural punishments are meted out in this lifetime:",
+"Supernatural rewards are bestowed out in this lifetime:",
+"Supernatural rewards are bestowed out in the afterlife:",
+"Faith / belief / trust / devotion:",
+"Generosity / charity:",
+"Ritual purity / ritual adherence / abstention from sources of impurity:",
+"Cleanliness (physical) / orderliness:",
+"Honesty / trustworthiness / integrity:",
+"Wisdom / understanding:",
+"Familial obedience / filial piety:",
+"Discernment / intelligence:",
+"Compassion / empathy / kindness / benevolence:",
+"Reverence / awe / wonder:",
+"Power / status / nobility:",
+"Courage (in battle):",
+"Fidelity / loyalty:",
+"Righteousness / moral rectitude:",
+"Beauty / attractiveness:",
+"Strength (physical):",
+"Assertiveness / decisiveness / confidence / initiative:",
+"Contentment / serenity / equanimity:",
+"Independence / creativity / freedom:",
+"Diligence / self-discipline / excellence:",
+"Moderation / frugality:",
+"Joyfulness / enthusiasm / cheerfulness:",
+"Optimism / hope:",
+"Forbearance / fortitude / patience:",
+"Humility / modesty:",
+"Gratitude / thankfulness:",
+"Cooperation:",
+"Courage (generic):",
+"Mercy / forgiveness / tolerance:",
+"Selflessness / selfless giving:",
+"Respectfulness / courtesy:",
+"Supernatural beings care about conversion of non-religionists:",
+"Supernatural beings care about disrespecting elders:",
+"Supernatural beings care about economic fairness:",
+"Supernatural beings care about gossiping:",
+"Supernatural beings care about honouring oaths:",
+"Supernatural beings care about laziness:",
+"Supernatural beings care about lying:",
+"Supernatural beings care about murder of coreligionists:",
+"Supernatural beings care about murder of members of other polities:",
+"Supernatural beings care about murder of members of other religions:",
+"Supernatural beings care about non-lethal fighting:",
+"Supernatural beings care about performance of rituals:",
+"Supernatural beings care about personal hygiene:",
+"Supernatural beings care about proper ritual observance:",
+"Supernatural beings care about property crimes:",
+"Supernatural beings care about sex:",
+"Supernatural beings care about shirking risk:",
+"Supernatural beings care about sorcery:",
+"Supernatural beings care about taboos:",
+"There is supernatural monitoring of prosocial norm adherence in particular:",
+"Punishment in this life consists of bad luck visited on descendants:",
+"Punishment in this life consists of bad luck:",
+"Punishment in this life consists of crop failure or bad weather:",
+"Punishment in this life consists of defeat in battle:",
+"Punishment in this life consists of disaster on journeys.",
+"Punishment in this life consists of extreme sensory displeasure:",
+"Punishment in this life consists of impaired reproduction:",
+"Punishment in this life consists of mild sensory displeasure:",
+"Punishment in this life consists of political failure:",
+"Punishment in this life consists of sickness or illness:",
+"Punishment in the afterlife consists of extreme sensory displeasure:",
+"Punishment in the afterlife consists of mild sensory displeasure:",
+"Punishment in the afterlife consists of reincarnation as an inferior life form:",
+"Punishment in the afterlife consists of reincarnation in an inferior realm:",
+"Reward in this life consists of enhanced health:",
+"Reward in this life consists of enhanced reproductive success:",
+"Reward in this life consists of extreme sensory pleasure:",
+"Reward in this life consists of fortune visited on descendants:",
+"Reward in this life consists of good luck:",
+"Reward in this life consists of healthy crops or good weather:",
+"Reward in this life consists of mild sensory pleasure:",
+"Reward in this life consists of peace or social stability:",
+"Reward in this life consists of political success or power:",
+"Reward in this life consists of success in battle:",
+"Reward in this life consists of success on journeys:",
+"Reward in the afterlife consists of eternal happiness:",
+"Reward in the afterlife consists of extreme sensory pleasure:",
+"Reward in the afterlife consists of mild sensory pleasure:",
+"Reward in the afterlife consists of reincarnation as a superior life form:",
+"Reward in the afterlife consists of reincarnation in a superior realm:"
+)
+```
+
+```{r}
+drh_pca <- drh %>%
+  filter(
+    question_name %in% target_questions,
+    poll_type == "Religious Group"
+  )
+length(unique(drh_pca$question_id))
+
+# 81 sub-questions and 6 parent questions
+```
+
+# Data Pre-processing
+
+DRH questions are structured hierarchically, with follow-up questions appearing in the dataset only when the parent question is answered "Yes". This structure creates cases of implicit missing data and implicit 'No' answers that must be made explicit for PCA. For example, if the answer to "Is supernatural monitoring present?" for a religious group is "Field doesn't know," this missing value logically extends to all child questions (e.g., "Supernatural beings care about lying" as its sub question should also receive the value 'Field doesn't know'). Similarly, if the parent answer is "No," all child questions should be coded as "No," but again, these rows do not exist.
+
+To prepare a complete dataset suitable for PCA, we must impute rows for all child questions so that they inherit parent answer values when the answer to parent question is 'No' or 'Field doesn't know' or 'I don't know'. This ensures that every observation has a complete record across all variables.
+
+```{r}
+# step 1: make empty rows for implicit sub-questions
+drh_grid <- drh_pca %>%
+  complete(entry_id, nesting(question_id, question_name, parent_question))
+```
+
+```{r}
+# step 2: fill empty rows with answer value of parent question
+# Missing values "Field doesn't know" or "I don't know" are indicated by -1.
+# 'No' values are indicated by 0.
+
+    ## if answer to parent question is -1, set answer for newly created empty rows to -1
+   ## if answer to parent question is 0, set answer for newly created empty rows to 0.
+
+parent_question <- unique(drh_pca$parent_question)
+
+drh_parent <- drh_pca %>%
+  filter(question_name %in% parent_question) %>%
+  select(entry_id, question_name, answer, answer_value) %>%
+  rename(parent_question = question_name, pa_answer = answer, pa_answer_value = answer_value) %>%
+  filter(pa_answer_value != 1)
+
+drh_filled <- drh_parent %>%
+    right_join(drh_grid) %>%
+  mutate(
+    answer = ifelse(is.na(answer), pa_answer, answer), # for every row where answer is NA, replace it with parent answer. otherwise, keep the existing value
+    answer_value = ifelse(is.na(answer_value), pa_answer_value, answer_value) # same as above but for answer_value column
+  )
+
+# removing questions without answers. essentially, these are those rows for which parent question didn't exist either. 
+
+drh_complete <- drh_filled %>%
+  filter(!is.na(answer_value))
+
+```
+
+```{r}
+# check if there are questions with multiple answer for the same entry
+
+drh_grouped <- drh_complete %>%
+  group_by(entry_id, question_id) %>%
+  group_split()
+
+drh_multi_answer <- do.call(rbind, drh_grouped[sapply(drh_grouped, nrow)>1])
+
+dim(drh_complete)
+dim(drh_multi_answer)
+
+# there are 21 rows (from 4341 total rows) with multiple answers. Handling them requires checking each case individually. For now, I'm going to drop them since they're not that many.
+```
+
+```{r}
+drh_complete_final <- drh_complete %>%
+  anti_join(drh_multi_answer, by = c("entry_id", "question_id"))
+```
+
+```{r}
+dim(drh_pca)
+dim(drh_complete_final)
+```
+
+Complete dataset has an additional 1158 imputed rows.
+
+Data needs to be transposed so that each question constitutes a column in the final dataset:
+
+```{r}
+drh_wide <- drh_complete_final %>%
+  pivot_wider(
+    id_cols = entry_id,
+    names_from = question_name,
+    values_from = answer_value
+  )
+
+# recoding -1 to NA
+
+drh_pca_final <- drh_wide %>%
+  select(-entry_id) %>%
+  mutate(across(everything(), ~ replace(., !(. %in% c(0, 1)), NA)))
+```
+
+# Analysis
+
+Virtues, supernatural monitoring, and supernatural rewards/punishments were included in separate models. Additionally, an honor-only model was tested.
+
+## Virtues
+
+For virtues, 4-component model shows *some* potential.
+
+```{r}
+virtues <- c("Faith / belief / trust / devotion:",
+"Generosity / charity:",
+"Ritual purity / ritual adherence / abstention from sources of impurity:",
+"Cleanliness (physical) / orderliness:",
+"Honesty / trustworthiness / integrity:",
+"Wisdom / understanding:",
+"Familial obedience / filial piety:",
+"Discernment / intelligence:",
+"Compassion / empathy / kindness / benevolence:",
+"Reverence / awe / wonder:",
+"Power / status / nobility:",
+"Courage (in battle):",
+"Fidelity / loyalty:",
+"Righteousness / moral rectitude:",
+"Beauty / attractiveness:",
+"Strength (physical):",
+"Assertiveness / decisiveness / confidence / initiative:",
+"Contentment / serenity / equanimity:",
+"Independence / creativity / freedom:",
+"Diligence / self-discipline / excellence:",
+"Moderation / frugality:",
+"Joyfulness / enthusiasm / cheerfulness:",
+"Optimism / hope:",
+"Forbearance / fortitude / patience:",
+"Humility / modesty:",
+"Gratitude / thankfulness:",
+"Cooperation:",
+"Courage (generic):",
+"Mercy / forgiveness / tolerance:",
+"Selflessness / selfless giving:",
+"Respectfulness / courtesy:")
+
+length(virtues)
+```
+
+```{r}
+drh_virtues <- drh_pca_final %>%
+  select(any_of(virtues))
+dim(drh_virtues)
+```
+
+### kmo
+
+```{r}
+# tetrachoric correlation matrix for binary variables
+virtue_tc <- tetrachoric(drh_virtues)
+virtue_rho <- virtue_tc$rho
+# warning 'Matrix was not positive definite, smoothing was done' seems to be prevelant in tetrachoric correlations
+```
+
+```{r}
+KMO(virtue_rho)
+```
+
+### Parallel analysis
+
+```{r}
+fa.parallel(virtue_rho, n.obs = 86, fm = "pa", fa = "pc")
+```
+
+### 4-component model
+
+```{r}
+virtues_pc_4 <- principal(drh_virtues, nfactors = 4, rotate = "oblimin", cor = "tet")
+virtues_pc_4 <- fa.sort(virtues_pc_4)
+summary(virtues_pc_4)
+model_performance(virtues_pc_4)
+```
+
+```{r}
+model_parameters(virtues_pc_4, sort = TRUE, threshold = "0.4") %>%
+  display()
+```
+
+### 3-component model
+
+```{r}
+virtues_pc_3 <- principal(drh_virtues, nfactors = 3, rotate = "oblimin", cor = "tet")
+virtues_pc_3 <- fa.sort(virtues_pc_3)
+summary(virtues_pc_3)
+model_performance(virtues_pc_3)
+```
+
+```{r}
+model_parameters(virtues_pc_3, sort = TRUE, threshold = "0.4") %>%
+  display()
+```
+
+## Supernatural Monitoring
+
+I tested various models with different question combinations and factor numbers for supernatural monitoring. In all instances, only a one-component structure worked. Here, I present output for a two-component structure to illustrate the issues.
+
+```{r}
+monitoring <- c("Supernatural beings care about conversion of non-religionists:",
+"Supernatural beings care about disrespecting elders:",
+"Supernatural beings care about economic fairness:",
+"Supernatural beings care about gossiping:",
+"Supernatural beings care about honouring oaths:",
+"Supernatural beings care about laziness:",
+"Supernatural beings care about lying:",
+"Supernatural beings care about murder of coreligionists:",
+"Supernatural beings care about murder of members of other polities:",
+"Supernatural beings care about murder of members of other religions:",
+"Supernatural beings care about non-lethal fighting:",
+"Supernatural beings care about performance of rituals:",
+"Supernatural beings care about personal hygiene:",
+"Supernatural beings care about proper ritual observance:",
+"Supernatural beings care about property crimes:",
+"Supernatural beings care about sex:",
+"Supernatural beings care about shirking risk:",
+"Supernatural beings care about sorcery:",
+"Supernatural beings care about taboos:",
+"There is supernatural monitoring of prosocial norm adherence in particular:"
+)
+```
+
+```{r}
+drh_monitoring <- drh_pca_final %>%
+  select(any_of(monitoring))
+dim(drh_monitoring)
+```
+
+### kmo
+
+```{r}
+# tetrachoric correlation matrix for binary variables
+monitoring_tc <- tetrachoric(drh_monitoring)
+monitoring_rho <- monitoring_tc$rho
+```
+
+```{r}
+KMO(monitoring_rho)
+```
+
+### Parallel analysis
+
+```{r}
+fa.parallel(monitoring_rho, n.obs = 86, fm = "pa", fa = "pc")
+```
+
+One component suggested.
+
+```{r}
+monitoring_pc_2 <- principal(drh_monitoring, nfactors = 2, rotate = "oblimin", cor = "tet")
+monitoring_pc_2 <- fa.sort(monitoring_pc_2)
+summary(monitoring_pc_2)
+model_performance(monitoring_pc_2)
+```
+
+```{r}
+model_parameters(monitoring_pc_2, sort = TRUE, threshold = "0.4") %>%
+  display()
+```
+
+## Supernatural Rewards / Punishment
+
+Similar to supernatural monitoring, I tested various models with different numbers of factors and question combinations (for example, treating rewards and punishments separately or combined). In all instances, no interpretable component structure emerged. Here, I present output for a two-component structure to illustrate the issues.
+
+```{r}
+incentives <- c(#"Reward in the afterlife consists of eternal happiness:",
+#"Reward in the afterlife consists of extreme sensory pleasure:",
+#"Reward in the afterlife consists of mild sensory pleasure:",
+#"Reward in the afterlife consists of reincarnation as a superior life form:",
+#"Reward in the afterlife consists of reincarnation in a superior realm:",
+"Reward in this life consists of enhanced health:",
+"Reward in this life consists of enhanced reproductive success:",
+"Reward in this life consists of extreme sensory pleasure:",
+"Reward in this life consists of fortune visited on descendants:",
+"Reward in this life consists of good luck:",
+"Reward in this life consists of healthy crops or good weather:",
+"Reward in this life consists of mild sensory pleasure:",
+"Reward in this life consists of peace or social stability:",
+"Reward in this life consists of political success or power:",
+"Reward in this life consists of success in battle:",
+"Reward in this life consists of success on journeys:",
+"Punishment in this life consists of bad luck visited on descendants:",
+"Punishment in this life consists of bad luck:",
+"Punishment in this life consists of crop failure or bad weather:",
+"Punishment in this life consists of defeat in battle:",
+"Punishment in this life consists of disaster on journeys.",
+"Punishment in this life consists of extreme sensory displeasure:",
+"Punishment in this life consists of impaired reproduction:",
+"Punishment in this life consists of mild sensory displeasure:",
+"Punishment in this life consists of political failure:",
+"Punishment in this life consists of sickness or illness:")
+```
+
+```{r}
+drh_incentives <- drh_pca_final %>%
+  select(any_of(incentives))
+dim(drh_incentives)
+```
+
+### kmo
+
+```{r}
+# tetrachoric correlation matrix for binary variables
+incentives_tc <- tetrachoric(drh_incentives)
+incentives_rho <- incentives_tc$rho
+```
+
+```{r}
+KMO(incentives_rho)
+
+# all afterlife questions had bad MSAs so best to exclude them. 
+```
+
+### Parallel analysis
+
+```{r}
+fa.parallel(incentives_rho, n.obs = 86, fm = "pa", fa = "pc")
+```
+
+```{r}
+incentives_pc_2 <- principal(drh_incentives, nfactors = 2, rotate = "oblimin", cor = "tet")
+incentives_pc_2 <- fa.sort(incentives_pc_2)
+summary(incentives_pc_2)
+model_performance(incentives_pc_2)
+```
+
+```{r}
+model_parameters(incentives_pc_2, sort = TRUE, threshold = "0.4") %>%
+  display()
+```
+
+## Honor-related
+
+This model includes only a subset of honor-related questions from my initial proposal for preliminary evaluation. Questions clustered primarily by question family rather than by substantive content (maybe first component shows some promise).
+
+```{r}
+honor <- c("Supernatural beings care about honouring oaths:",
+"Supernatural beings care about lying:",
+"Supernatural beings care about property crimes:",
+"Supernatural beings care about gossiping:",
+"Fidelity / loyalty:",
+"Honesty / trustworthiness / integrity:",
+"Respectfulness / courtesy:",
+"Supernatural beings care about disrespecting elders:",
+"Diligence / self-discipline / excellence:",
+"Power / status / nobility:",
+"Punishment in this life consists of political failure:",
+"Reward in this life consists of political success or power:",
+"Familial obedience / filial piety:",
+"Punishment in this life consists of impaired reproduction:",
+"Punishment in this life consists of bad luck visited on descendants:",
+"Reward in this life consists of enhanced reproductive success:",
+"Reward in this life consists of fortune visited on descendants:",
+"Selflessness / selfless giving:",
+"Generosity / charity:",
+"Compassion / empathy / kindness / benevolence:",
+"Supernatural beings care about sex:",
+"Courage (in battle):",
+"Courage (generic):",
+"Strength (physical):",
+"Punishment in this life consists of defeat in battle:",
+"Reward in this life consists of success in battle:"
+)
+```
+
+```{r}
+drh_honor <- drh_pca_final %>%
+  select(any_of(honor))
+dim(drh_honor)
+```
+
+### kmo
+
+```{r}
+# tetrachoric correlation matrix for binary variables
+honor_tc <- tetrachoric(drh_honor)
+honor_rho <- honor_tc$rho
+```
+
+```{r}
+KMO(honor_rho)
+```
+
+### Parallel analysis
+
+```{r}
+fa.parallel(honor_rho, n.obs = 86, fm = "pa", fa = "pc")
+```
+
+### 3-factor model
+
+```{r}
+honor_pc_3 <- principal(drh_honor, nfactors = 3, rotate = "oblimin", cor = "tet")
+honor_pc_3 <- fa.sort(honor_pc_3)
+summary(honor_pc_3)
+model_performance(honor_pc_3)
+```
+
+```{r}
+model_parameters(honor_pc_3, sort = TRUE, threshold = "0.4") %>%
+  display()
+```
